@@ -1,5 +1,4 @@
 name: Spring Boot CI Template
-
 on:
   workflow_call:
     inputs:
@@ -13,35 +12,58 @@ jobs:
   avoid-redundancy:
     runs-on: ubuntu-24.04
     steps:
-      - name: Cancelar workflows previos
+      - name: Cancel previous workflows
         uses: styfle/cancel-workflow-action@0.12.1
+        with:
+          access_token: ${{ github.token }}
 
   build:
     runs-on: ubuntu-24.04
+    needs: avoid-redundancy
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up JDK ${{ inputs.java-version }}
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: ${{ inputs.java-version }}
-      - run: mvn clean package -DskipTests
-      - uses: actions/upload-artifact@v4
+          cache: maven
+          
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+        
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifact
           path: target/*.jar
+          retention-days: 1
 
   test:
     runs-on: ubuntu-24.04
     needs: build
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up JDK ${{ inputs.java-version }}
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: ${{ inputs.java-version }}
-      - uses: actions/download-artifact@v4
+          cache: maven
+          
+      - name: Run tests
+        run: mvn test
+        
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: build-artifact
-      - run: mvn test
+          name: test-results
+          path: |
+            target/surefire-reports/
+            target/site/jacoco/
+          retention-days: 3
