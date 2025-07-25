@@ -10,34 +10,38 @@ on:
     secrets: {}
 
 jobs:
-  build:
-    name: Build & Test
-    runs-on: ubuntu-latest
-
+  avoid-redundancy:
+    runs-on: ubuntu-24.04
     steps:
       - name: Cancelar workflows previos
         uses: styfle/cancel-workflow-action@0.12.1
-    
-      - uses: actions/checkout@v4
 
-      - name: Set up JDK ${{ inputs.java-version }}
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: ${{ inputs.java-version }}
-
-      - uses: actions/cache@v4
+      - run: mvn clean package -DskipTests
+      - uses: actions/upload-artifact@v4
         with:
-          path: ~/.m2
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
+          name: build-artifact
+          path: target/*.jar
 
-      - run: mvn clean verify
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
+  test:
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
         with:
-          name: test-report
-          path: target/surefire-reports
+          distribution: 'temurin'
+          java-version: ${{ inputs.java-version }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+      - run: mvn test
